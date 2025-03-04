@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Letter Classification</title>
     <style>
+        /* Previous CSS remains the same */
         body {
             display: flex;
             justify-content: center;
@@ -56,6 +57,11 @@
             cursor: pointer;
             transition: background-color 0.2s;
             font-size: 1rem;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
 
         .clear-btn {
@@ -120,7 +126,7 @@
             ctx.fillStyle = 'white';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.strokeStyle = 'black';
-            ctx.lineWidth = 8;
+            ctx.lineWidth = 15;
             ctx.lineCap = 'round';
         }
 
@@ -175,58 +181,64 @@
             ctx.fillStyle = 'white';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.strokeStyle = 'black';
-            ctx.lineWidth = 8;
+            ctx.lineWidth = 15;
             document.getElementById('result').textContent = 'ارسم حرفاُ ثم اضغط موافق لرؤية النتيجة';
             document.getElementById('result').className = 'result';
         }
 
         async function submitCanvas() {
+            const submitBtn = document.querySelector('.submit-btn');
+            const resultDiv = document.getElementById('result');
+
             try {
                 // Show loading state
-                const resultDiv = document.getElementById('result');
-                resultDiv.textContent = 'Processing...';
+                submitBtn.disabled = true;
+                resultDiv.textContent = 'جاري المعالجة...';
                 resultDiv.className = 'result';
 
-                // Disable submit button to prevent multiple submissions
-                const submitBtn = document.querySelector('.submit-btn');
-                submitBtn.disabled = true;
-
                 // Convert canvas to blob
-                const blob = await new Promise(resolve => {
-                    canvas.toBlob(resolve, 'image/png');
+                const blob = await new Promise((resolve, reject) => {
+                    canvas.toBlob((blob) => {
+                        if (blob) {
+                            resolve(blob);
+                        } else {
+                            reject(new Error('Canvas to Blob conversion failed'));
+                        }
+                    }, 'image/jpg');
                 });
 
                 // Create form data
                 const formData = new FormData();
-                formData.append('image', blob, 'drawing.png');
+                formData.append('image', blob, 'drawing.jpg');
 
                 // Send request to Flask API
-                const response = await fetch('http://192.168.3.153:5000', {
+                const response = await fetch('http://127.0.0.1:5000/predictImage', {
                     method: 'POST',
-                    body: formData
+                    body: formData,
+                    mode: 'cors', // Add this
+                    headers: {
+                        'Accept': 'application/json',
+                    },
                 });
 
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
 
-                const result = await response.json();
+                const data = await response.json();
 
-                if (result.success) {
-                    resultDiv.textContent = `Prediction: ${result.prediction}`;
+                if (data.success) {
+                    resultDiv.textContent = `prediction: ${data.prediction}`;
                     resultDiv.className = 'result success';
                 } else {
-                    throw new Error(result.error || 'Unknown error occurred');
+                    throw new Error(data.error || 'حدث خطأ غير معروف');
                 }
 
             } catch (error) {
                 console.error('Error:', error);
-                const resultDiv = document.getElementById('result');
-                resultDiv.textContent = `Error: ${error.message}`;
+                resultDiv.textContent = `خطأ: ${error.message}`;
                 resultDiv.className = 'result error';
             } finally {
-                // Re-enable submit button
-                const submitBtn = document.querySelector('.submit-btn');
                 submitBtn.disabled = false;
             }
         }
